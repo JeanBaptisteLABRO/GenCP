@@ -40,7 +40,7 @@ depth: 2 # 12
 # training
 is_use_tb: True
 x0_is_use_noise: True
-test_interval: 50
+test_interval: 40
 train_batch_size: 2
 test_batch_size: 2
 
@@ -54,7 +54,7 @@ sigma: 0.01
 
 # iteration
 train_mode: "iteration" # epoch, iteration
-total_iterations: 50
+total_iterations: 120
 epochs: 1000
 
 scheduler: "cosine"
