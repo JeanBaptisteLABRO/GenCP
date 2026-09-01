@@ -19,10 +19,10 @@ from data.double_cylinder_dataset import DoubleCylinderDataset
 from data.ntcouple_dataset import NTcoupleDataset
 from data.ntcouple_normalizer import NTcoupleNormalizer
 from model.cno_surrogate import CNO3d as CNO3d_surrogate
-from model.fno_surrogate import FNO3d as FNO3d_surrogate
+# MISSING IN REPO: from model.fno_surrogate import FNO3d as FNO3d_surrogate
 from model.SiT_FNO import SiT_FNO
 from model.sit_fno_surrogate import SiT_FNO as SiT_FNO_surrogate
-from model.fno import FNO3d
+# MISSING IN REPO: from model.fno import FNO3d
 from model.cno import CNO3d
 from utils.utils import set_seed, add_args_from_config, setup_logging, mse_loss, rel_l2_loss, find_model, parse_transport_args, loss_with_mask
 
