@@ -23,8 +23,8 @@ from utils.visualize import FluidFieldVisualizer
 import pdb
 import torchcfm
 from model.cno_surrogate import CNO3d as CNO3d_surrogate
-from model.fno_surrogate import FNO3d as FNO3d_surrogate
-from model.fno import FNO3d
+# from model.fno_surrogate import FNO3d as FNO3d_surrogate
+# from model.fno import FNO3d
 from model.cno import CNO3d
 from model.SiT_FNO import SiT_FNO
 from model.sit_fno_surrogate import SiT_FNO as SiT_FNO_surrogate
@@ -112,6 +112,7 @@ def main(mode, args):
                         out_dim=args.out_dim, 
                         in_size=args.in_size, 
                         N_layers=args.depth,
+                        channel_multiplier=args.channel_multiplier,
                         dataset_name=args.dataset_name,
                         x0_is_use_noise=args.x0_is_use_noise,
                         stage=args.stage).to(device)
