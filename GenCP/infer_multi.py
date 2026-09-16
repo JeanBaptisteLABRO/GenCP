@@ -76,21 +76,34 @@ def create_couple_step_fn_fsi(model_fluid, model_structure, device, use_torchcfm
                 x_structure = x_fluid.clone()
                 x_structure[..., -1:] = x_fluid[..., -1:] + vt_structure * dt
                 return x_structure
+            # elif flag == "strang":
+            #     vt_fluid = model_fluid(x, tb, x0, model_kwargs.get("cond"))
+            #     x_fluid = x + vt_fluid* dt * 0.5
+            #     x_fluid[...,-1:] = x[...,-1:]
+
+            #     vt_structure = model_structure(x_fluid, tb, x0, model_kwargs.get("cond"))
+            #     x_structure = x_fluid + vt_structure * dt
+            #     x_structure[..., :-1] = x_fluid[..., :-1]
+
+            #     vt_fluid_2 = model_fluid(x_structure, tb, x0, model_kwargs.get("cond"))
+            #     x = x_structure + vt_fluid_2 * dt * 0.5
+            #     x[..., -1:] = x_structure[..., -1:]
+
+            #     return x
             elif flag == "strang":
                 vt_fluid = model_fluid(x, tb, x0, model_kwargs.get("cond"))
-                x_fluid = x + vt_fluid* dt * 0.5
-                x_fluid[...,-1:] = x[...,-1:]
+                x_half = x.clone()
+                x_half[..., :-1] = x[..., :-1] + vt_fluid * dt * 0.5
 
-                vt_structure = model_structure(x_fluid, tb, x0, model_kwargs.get("cond"))
-                x_structure = x_fluid + vt_structure * dt
-                x_structure[..., :-1] = x_fluid[..., :-1]
+                vt_structure = model_structure(x_half, tb, x0, model_kwargs.get("cond"))
+                x_full = x_half.clone()
+                x_full[..., -1:] = x_half[..., -1:] + vt_structure * dt
 
-                vt_fluid_2 = model_fluid(x_structure, tb, x0, model_kwargs.get("cond"))
-                x = x_structure + vt_fluid_2 * dt * 0.5
-                x[..., -1:] = x_structure[..., -1:]
-
-                return x
-
+                vt_fluid_2 = model_fluid(x_full, tb, x0, model_kwargs.get("cond"))
+                x_final = x_full.clone()
+                x_final[..., :-1] = x_full[..., :-1] + vt_fluid_2 * dt * 0.5
+                return x_final
+            
         return single_step_cfm_ode
     
 def create_couple_step_fn_surrogate(model_fluid, model_structure, pred_update_coeff, dataset_name, input_step, output_step):
