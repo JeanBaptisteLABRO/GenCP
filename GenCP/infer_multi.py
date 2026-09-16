@@ -11,7 +11,7 @@ torch.backends.cudnn.allow_tf32 = True
 import torchcfm
 from model.SiT import SiT
 from model.cno import CNO3d
-from model.fno import FNO3d
+# from model.fno import FNO3d
 from model.SiT_FNO import SiT_FNO
 from model.cno_surrogate import CNO3d as CNO3d_surrogate
 from model.sit_fno_surrogate import SiT_FNO as SiT_FNO_surrogate
@@ -58,15 +58,24 @@ def create_couple_step_fn_fsi(model_fluid, model_structure, device, use_torchcfm
                 vt_structure = model_structure(x, tb, x0, model_kwargs.get("cond"))
                 vt = torch.cat([vt_fluid, vt_structure], dim=-1)
                 return x + vt * dt
+            # elif flag == "lie":
+            #     vt_fluid = model_fluid(x, tb, x0, model_kwargs.get("cond"))
+            #     x_fluid = x + vt_fluid* dt
+            #     x_fluid[...,-1:] = x[...,-1:]
+            #     vt_structure = model_structure(x_fluid, tb, x0, model_kwargs.get("cond"))
+            #     x_structure = x_fluid + vt_structure * dt
+            #     x_structure[..., :-1] = x_fluid[..., :-1]
+            #     x = x_structure
+            #     return x
             elif flag == "lie":
                 vt_fluid = model_fluid(x, tb, x0, model_kwargs.get("cond"))
-                x_fluid = x + vt_fluid* dt
-                x_fluid[...,-1:] = x[...,-1:]
+                x_fluid = x.clone()
+                x_fluid[..., :-1] = x[..., :-1] + vt_fluid * dt
+
                 vt_structure = model_structure(x_fluid, tb, x0, model_kwargs.get("cond"))
-                x_structure = x_fluid + vt_structure * dt
-                x_structure[..., :-1] = x_fluid[..., :-1]
-                x = x_structure
-                return x
+                x_structure = x_fluid.clone()
+                x_structure[..., -1:] = x_fluid[..., -1:] + vt_structure * dt
+                return x_structure
             elif flag == "strang":
                 vt_fluid = model_fluid(x, tb, x0, model_kwargs.get("cond"))
                 x_fluid = x + vt_fluid* dt * 0.5
@@ -136,6 +145,7 @@ def load_model(args, device, model_type="fluid"):
                             out_dim=args.out_dim_fluid, 
                             in_size=args.in_size, 
                             N_layers=args.depth_fluid,
+                            channel_multiplier=args.channel_multiplier,
                             dataset_name=args.dataset_name,
                             x0_is_use_noise=args.x0_is_use_noise,
                             stage=args.stage).to(device)
@@ -166,6 +176,7 @@ def load_model(args, device, model_type="fluid"):
                             out_dim=args.out_dim_structure, 
                             in_size=args.in_size, 
                             N_layers=args.depth_structure,
+                            channel_multiplier=args.channel_multiplier,
                             dataset_name=model_type,
                             x0_is_use_noise=args.x0_is_use_noise,
                             stage=args.stage).to(device)
