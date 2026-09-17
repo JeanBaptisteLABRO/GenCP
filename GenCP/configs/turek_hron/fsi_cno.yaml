@@ -5,7 +5,7 @@ results_path: "./results/"
 
 # data
 dataset_name: "turek_hron_data"
-dataset_path: "/path/to/gencp_dataset/"
+dataset_path: "/home/jblabro/Documents/GenCP_data/Datasets/"
 num_workers: 12
 normalizer: "range"
 n_data_set: null  # Limit dataset size, null means use all data
@@ -15,8 +15,8 @@ sdf_threshold: 0.04
 
 # model
 model_name: "CNO"
-fluid_checkpoint_path: /path/to/results/turek_hron_data/fluid_CNO/checkpoint/best_main_model.pth
-structure_checkpoint_path: /path/to/results/turek_hron_data/structure_CNO/checkpoint/best_main_model.pth
+fluid_checkpoint_path: "/home/jblabro/Documents/GenCP/GenCP/results/turek_hron_data/fluid_CNO/2026-09-10_11-17-26/best_main_model.pth"
+structure_checkpoint_path: "/home/jblabro/Documents/GenCP/GenCP/results/turek_hron_data/structure_CNO/2026-09-09_09-57-12/best_main_model.pth"
 stage: "couple"  # fluid, structure, fsi
 input_size: [108, 88] #[322, 226]
 in_size: 108
@@ -34,7 +34,7 @@ num_inference_steps: 1
 use_coupled_sampling: True
 
 coupled: True
-flag: jacobi  # jacobi, lie, strang
+flag: strang  # jacobi, lie, strang
 
 mode: "ODE"  # SDE, ODE
 # SDE parameters
@@ -77,3 +77,5 @@ num_sampling_steps: 10
 
 # visualize
 save_figs_path: "./visualization_results"
+
+channel_multiplier: 16

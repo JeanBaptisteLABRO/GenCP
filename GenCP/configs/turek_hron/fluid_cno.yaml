@@ -6,8 +6,8 @@ results_path: "./results/"
 
 # data
 dataset_name: "turek_hron_data" # fluidzero_data, double_cylinder_simulation_data, double_cylinder_measurement_data
-dataset_path: "/path/to/gencp_dataset/"
-num_workers: 12
+dataset_path: "/home/jblabro/Documents/GenCP_data/Datasets/"
+num_workers: 4
 normalizer: "range"
 n_data_set: null  # 限制使用的数据量，null表示使用全部数据
 length: 999 # 1000
@@ -40,9 +40,9 @@ depth: 4 # 12
 # training
 is_use_tb: True
 x0_is_use_noise: True
-test_interval: 1000
-train_batch_size: 8
-test_batch_size: 8
+test_interval: 500
+train_batch_size: 3
+test_batch_size: 3
 
 input_step: 3
 output_step: 12
@@ -70,3 +70,5 @@ num_sampling_steps: 10
 # visualize
 save_figs_path: "./visualization_results"
 
+
+channel_multiplier: 16

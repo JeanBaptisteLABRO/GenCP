@@ -1,5 +1,5 @@
 # exp
-exp_name: "CNO_turek_hron_data_structure"
+exp_name: "CNO_turek_hron_data_fluid"
 gpu: 0
 seed: 0
 results_path: "./results/"
@@ -12,10 +12,10 @@ normalizer: "range"
 n_data_set: null  # 限制使用的数据量，null表示使用全部数据
 length: 999 # 1000
 dt: 5
-sdf_threshold: 0.02
+sdf_threshold: 0.04
 
 # choose
-stage: "structure" # structure, fluid
+stage: "fluid" # structure, fluid
 model_name: "CNO" # SiT, UNet3d, CNO
 
 use_torchcfm: True
@@ -24,25 +24,25 @@ use_surrogate: False
 
 # model
 is_resume: False
-checkpoint_path: None
+checkpoint_path: "/home/jblabro/Documents/GenCP/GenCP/results/turek_hron_data/fluid_CNO/2026-09-10_11-17-26/best_main_model.pth"
 input_size: [108, 88] # [322, 226]
 in_dim: 4
-out_dim: 1
+out_dim: 3
 in_channels: 4
-out_channels: 1
+out_channels: 3
 in_size: 108
 # hidden_size: 128 # 768
 # patch_size: [2, 2]
 # num_heads: 4 # 12 
-depth: 2 # 12 
+depth: 4 # 12 
 # use_wavelet: False
 
 # training
 is_use_tb: True
 x0_is_use_noise: True
-test_interval: 1000
-train_batch_size: 8
-test_batch_size: 8
+test_interval: 500
+train_batch_size: 3
+test_batch_size: 3
 
 input_step: 3
 output_step: 12
