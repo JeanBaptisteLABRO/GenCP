@@ -5,6 +5,7 @@
 Sample new images from pre-trained SiT models for FSI (Fluid-Structure Interaction).
 Implements dual-field interactive autoregressive inference.
 """
+import os
 import torch
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
@@ -15,7 +16,7 @@ from model.cno import CNO3d
 from model.SiT_FNO import SiT_FNO
 from model.cno_surrogate import CNO3d as CNO3d_surrogate
 from model.sit_fno_surrogate import SiT_FNO as SiT_FNO_surrogate
-from utils.utils import parse_ode_args, parse_sde_args, parse_transport_args, find_model, add_args_from_config, rel_l2_loss
+from utils.utils import parse_ode_args, parse_sde_args, parse_transport_args, find_model, add_args_from_config, rel_l2_loss, rel_l2_loss_per_step
 import argparse
 from time import time
 
@@ -289,7 +290,7 @@ def coupled_flow_sampling_algorithm_cp(couple_step_fn, input_norm, target_norm, 
 
     return final_result
 
-def autoregressive_inference(input_norm, target_norm, num_steps, device, args, attrs, couple_step_fn):
+def autoregressive_inference(input_norm, target_norm, num_steps, device, args, attrs, couple_step_fn, k=9):
     """Perform autoregressive inference with dual-field interaction (all data already normalized)"""
     
     initial_state = input_norm.clone()
@@ -312,11 +313,15 @@ def autoregressive_inference(input_norm, target_norm, num_steps, device, args, a
             
         # Store this step's prediction (squeeze out the time dimension)
         predictions_norm.append(next_state)  # [batch, height, width, 4]
+        initial_state = next_state[:, k:k+3]
 
         print(f"Step {step + 1} completed")
     
-    predictions_norm = predictions_norm[-1]
+    # predictions_norm = predictions_norm[-1]
+    predictions_norm = torch.cat(predictions_norm, dim=1)
+
     print(f"Autoregressive inference took {time() - start_time:.2f} seconds.")
+    print(f"predictions_norm shape: {predictions_norm.shape}")
     return predictions_norm
 
 
@@ -354,7 +359,7 @@ def main(args):
     if args.dataset_name == 'turek_hron_data':
         train_dataset = TurekHronDataset(dataset_path=args.dataset_path, length=args.length, input_size=args.input_step, output_size=args.output_step, stride=args.stride, mode='train', num_delta_t=args.num_delta_t,
                                                 stage=args.stage, dt=args.dt)
-        val_dataset = TurekHronDataset(dataset_path=args.dataset_path, length=args.length, input_size=args.input_step, output_size=args.output_step, stride=args.stride, mode='val', num_delta_t=args.num_delta_t,
+        val_dataset = TurekHronDataset(dataset_path=args.dataset_path, length=args.length, input_size=args.input_step, output_size=args.output_step * args.num_inference_steps, stride=args.stride, mode='val', num_delta_t=args.num_delta_t,
                                                 stage='couple', dt=args.dt)
     if args.dataset_name == 'double_cylinder_data':
         train_dataset = DoubleCylinderDataset(dataset_path=args.dataset_path, length=args.length, input_size=args.input_step, output_size=args.output_step, stride=args.stride, mode='train', num_delta_t=args.num_delta_t,
@@ -412,7 +417,7 @@ def main(args):
         
         if getattr(args, "use_torchcfm", False):
             predictions_norm = autoregressive_inference(
-                input_norm, target_norm, args.num_inference_steps, device, args, attrs,
+                input_norm, target_norm[:, :args.output_step], args.num_inference_steps, device, args, attrs,
                 couple_step_fn
             )
         
@@ -469,12 +474,24 @@ def main(args):
             rel_l2_fluid_p += rel_l2_loss(final_fluid_p*sdf_mask, target[..., 2:3]*sdf_mask).mean().item()
             rel_l2_structure += rel_l2_loss(final_structure*sdf_mask, target[..., 3:4]*sdf_mask).mean().item()
 
+
+            err_u   = rel_l2_loss_per_step(final_fluid_u*sdf_mask,   target[..., 0:1]*sdf_mask)
+            err_v   = rel_l2_loss_per_step(final_fluid_v*sdf_mask,   target[..., 1:2]*sdf_mask)
+            err_p   = rel_l2_loss_per_step(final_fluid_p*sdf_mask,   target[..., 2:3]*sdf_mask)
+            err_sdf = rel_l2_loss_per_step(final_structure*sdf_mask, target[..., 3:4]*sdf_mask)
+
+
             num += 1
 
             print(f"rel_l2_fluid_u: {rel_l2_fluid_u/(num):.6f}")
             print(f"rel_l2_fluid_v: {rel_l2_fluid_v/(num):.6f}")
             print(f"rel_l2_fluid_p: {rel_l2_fluid_p/(num):.6f}")
             print(f"rel_l2_structure: {rel_l2_structure/(num):.6f}")
+
+            print("step |    u    |    v    |    p    |   sdf")
+            for i in range(err_u.shape[1]):
+                print(f"{i:4d} | {err_u[:,i].mean():.5f} | {err_v[:,i].mean():.5f} | "
+                    f"{err_p[:,i].mean():.5f} | {err_sdf[:,i].mean():.5f}")
 
             final_prediction = final_prediction.cpu().numpy()
             target = target.cpu().numpy()
@@ -547,6 +564,29 @@ def main(args):
                     save_name="time_series_animation_structure.gif",
                     fps=2
                 )
+
+                import matplotlib.pyplot as plt
+
+                steps = range(err_u.shape[1])
+                plt.figure(figsize=(9, 5))
+                plt.plot(steps, err_u.mean(0).cpu(),   marker='o', label='u')
+                plt.plot(steps, err_v.mean(0).cpu(),   marker='o', label='v')
+                plt.plot(steps, err_p.mean(0).cpu(),   marker='o', label='p')
+                plt.plot(steps, err_sdf.mean(0).cpu(), marker='o', label='SDF')
+
+                for c in range(1, args.num_inference_steps):
+                    plt.axvline(c * args.output_step - 0.5, color='gray',
+                                linestyle='--', alpha=0.6)
+
+                plt.yscale('log')
+                plt.xlabel("Pas de temps prédit")
+                plt.ylabel("Erreur $L_2$ relative")
+                plt.title(f"Dérive autorégressive ({args.num_inference_steps} cycles, flag={args.flag})")
+                plt.legend()
+                plt.grid(alpha=0.3)
+                plt.savefig(os.path.join(visualizer.save_dir, "error_per_timestep.png"),
+                            dpi=150, bbox_inches='tight')
+                plt.close()
 
         print("Inference completed. Results saved to:", args.save_figs_path)
         

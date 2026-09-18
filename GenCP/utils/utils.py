@@ -99,6 +99,12 @@ def rel_l2_loss(pred, target):
     target = target.reshape(b, -1)
     return (torch.norm(pred - target, dim=1) / torch.norm(target, dim=1))
 
+def rel_l2_loss_per_step(pred, target):
+    b, t = pred.shape[0], pred.shape[1]
+    pred = pred.reshape(b, t, -1)       # (B, T, H×W×C)
+    target = target.reshape(b, t, -1)
+    return torch.norm(pred - target, dim=2) / torch.norm(target, dim=2)
+
 def mse_loss(pred, target):
     """Returns per-sample MSE with shape [batch]."""
     b = pred.size(0)

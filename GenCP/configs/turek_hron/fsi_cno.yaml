@@ -30,11 +30,11 @@ depth_structure: 2 # 12
 
 # inference
 debug_flow: false
-num_inference_steps: 1
+num_inference_steps: 2
 use_coupled_sampling: True
 
 coupled: True
-flag: strang  # jacobi, lie, strang
+flag: jacobi  # jacobi, lie, strang
 
 mode: "ODE"  # SDE, ODE
 # SDE parameters
