@@ -61,7 +61,7 @@ def main(mode, args):
     if args.dataset_name == 'turek_hron_data':
         train_dataset = TurekHronDataset(dataset_path=args.dataset_path, length=args.length, input_size=args.input_step, output_size=args.output_step, stride=args.stride, mode='train', num_delta_t=args.num_delta_t
                                                  , stage=args.stage, dt=args.dt)
-        val_dataset = TurekHronDataset(dataset_path=args.dataset_path, length=args.length, input_size=args.input_step, output_size=args.output_step, stride=args.stride, mode='val', num_delta_t=args.num_delta_t
+        val_dataset = TurekHronDataset(dataset_path=args.dataset_path, length=args.length, input_size=args.input_step, output_size=args.output_step * args.num_inference_steps, stride=args.stride, mode='val', num_delta_t=args.num_delta_t
                                                , stage=args.stage, dt=args.dt)
     if args.dataset_name == 'double_cylinder_data':
         train_dataset = DoubleCylinderDataset(dataset_path=args.dataset_path, length=args.length, input_size=args.input_step, output_size=args.output_step, stride=args.stride, mode='train', num_delta_t=args.num_delta_t
@@ -265,8 +265,24 @@ def main(mode, args):
         target_norm = target_norm.to(device).float()
         input_norm = input_norm.to(device).float()
 
-        model_kwargs = dict(x0=input_norm, cond=attrs)
-        samples = sample_fn(z, target_norm, model.to(device), **model_kwargs)
+        # model_kwargs = dict(x0=input_norm, cond=attrs)
+        # samples = sample_fn(z, target_norm, model.to(device), **model_kwargs)
+        
+        k = 9
+        n_out = args.output_step
+        current_input = input_norm
+        blocks = []
+
+        for cycle in range(args.num_inference_steps):
+            z_c = torch.randn_like(target_norm[:, :n_out]).to(device).float()
+            model_kwargs = dict(x0=current_input, cond=attrs)
+            block = sample_fn(z_c, target_norm[:, :n_out], model.to(device), **model_kwargs)
+            blocks.append(block)
+            current_input = block[:, k:k+3]
+
+        samples = torch.cat(blocks, dim=1)
+
+
 
         if getattr(args, "use_surrogate", False):
             if args.stage == "fluid":
@@ -279,7 +295,7 @@ def main(mode, args):
                 samples = pred_ 
 
         _, samples_denorm = data_normalizer.postprocess(input_norm, samples)
-
+        print(f"samples: {samples_denorm.shape}, target: {target.shape}")
         target = target.to(device).float()
 
 

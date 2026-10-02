@@ -579,9 +579,8 @@ def main(args):
                                 linestyle='--', alpha=0.6)
 
                 plt.yscale('log')
-                plt.xlabel("Pas de temps prédit")
-                plt.ylabel("Erreur $L_2$ relative")
-                plt.title(f"Dérive autorégressive ({args.num_inference_steps} cycles, flag={args.flag})")
+                plt.xlabel("Predicted timesteps")
+                plt.ylabel("Relative $L_2$ error")
                 plt.legend()
                 plt.grid(alpha=0.3)
                 plt.savefig(os.path.join(visualizer.save_dir, "error_per_timestep.png"),

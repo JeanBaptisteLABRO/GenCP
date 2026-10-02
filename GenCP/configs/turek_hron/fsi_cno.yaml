@@ -30,7 +30,7 @@ depth_structure: 2 # 12
 
 # inference
 debug_flow: false
-num_inference_steps: 2
+num_inference_steps: 1
 use_coupled_sampling: True
 
 coupled: True
@@ -50,7 +50,7 @@ is_use_tb: True
 x0_is_use_noise: True
 test_interval: 100
 train_batch_size: 8
-test_batch_size: 10
+test_batch_size: 1
 
 input_step: 3
 output_step: 12
