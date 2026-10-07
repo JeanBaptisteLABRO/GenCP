@@ -12,6 +12,7 @@ import yaml
 import json
 from accelerate import Accelerator, DistributedDataParallelKwargs
 import pdb
+import random
 
 
 from data.turek_hron_dataset import TurekHronDataset
@@ -24,7 +25,7 @@ from model.SiT_FNO import SiT_FNO
 from model.sit_fno_surrogate import SiT_FNO as SiT_FNO_surrogate
 # MISSING IN REPO: from model.fno import FNO3d
 from model.cno import CNO3d
-from utils.utils import set_seed, add_args_from_config, setup_logging, mse_loss, rel_l2_loss, find_model, parse_transport_args, loss_with_mask
+from utils.utils import set_seed, add_args_from_config, setup_logging, mse_loss, rel_l2_loss, find_model, parse_transport_args, loss_with_mask, get_rollout_prob
 
 from collections import OrderedDict
 from copy import deepcopy
@@ -237,11 +238,19 @@ class Trainer:
         
     def setup_datasets(self):
         """Setup datasets"""
+        
+        # Rollout training needs one extra block per unroll depth as supervision target
+        if getattr(self.args, 'rollout_training', False):
+            train_output_size = self.args.output_step * (getattr(self.args, 'rollout_max_blocks', 1) + 1)
+        else:
+            train_output_size = self.args.output_step
+
         if self.args.dataset_name == 'turek_hron_data':
             train_dataset = TurekHronDataset(dataset_path=self.args.dataset_path, 
                                                     length=self.args.length, 
                                                     input_size=self.args.input_step, 
-                                                    output_size=self.args.output_step, 
+                                                    #output_size=self.args.output_step, 
+                                                    output_size=train_output_size,
                                                     stride=self.args.stride, mode='train',
                                                     stage=self.args.stage, num_delta_t=self.args.num_delta_t,
                                                     dt=self.args.dt)
@@ -571,7 +580,7 @@ class Trainer:
 
 
             
-    def train_step(self, input, target, attrs):
+    def train_step(self, input, target, attrs, rollout_depth=0):
         """Single training step"""
         if self.use_accelerator:
             if self.accelerator.sync_gradients:
@@ -580,6 +589,21 @@ class Trainer:
             self.optimizer.zero_grad()
  
         input, target = self.data_normalizer.preprocess(input, target)
+
+        # Rollout training: replace ground-truth conditioning by the model's own
+        # predictions, and shift the target to the matching block.
+        if getattr(self.args, 'rollout_training', False):
+            n_out = self.args.output_step
+            if rollout_depth > 0:
+                k = getattr(self.args, 'reinject_index', n_out - 3)
+                dev = input.device
+                cond = input
+                for _ in range(rollout_depth):
+                    block = self.rollout_generate(cond, attrs)
+                    cond = block[:, k:k+3]
+                input = cond.to(dev)
+            target = target[:, rollout_depth * n_out : (rollout_depth + 1) * n_out]
+
         
         if self.args.use_torchcfm:
             if self.args.dataset_name != "ntcouple":
@@ -1051,7 +1075,26 @@ class Trainer:
             
             self.log_info(f"Beginning epoch {epoch}...")
             for input, target, grid_x, grid_y, attrs in self.train_dataloader:
-                loss, grad_norm = self.train_step(input, target, attrs)
+                # loss, grad_norm = self.train_step(input, target, attrs)
+                
+
+                # Rollout training: decide whether this iteration conditions on the
+                # model's own predictions, and how deep to unroll.
+                rollout_depth = 0
+                p = get_rollout_prob(self.train_steps, self.args)
+                if p > 0 and random.random() < p:
+                    max_blocks = getattr(self.args, 'rollout_max_blocks', 1)
+                    if getattr(self.args, 'rollout_depth_random', True):
+                        rollout_depth = random.randint(1, max_blocks)
+                    else:
+                        rollout_depth = max_blocks
+
+                loss, grad_norm = self.train_step(input, target, attrs, rollout_depth=rollout_depth)
+                pbar.set_postfix(loss=loss, grad_norm=f"{grad_norm:.3f}", d=rollout_depth)
+
+
+
+                
                 total_loss += loss
                 pbar.set_postfix(loss=loss, grad_norm=f"{grad_norm:.3f}")
                 

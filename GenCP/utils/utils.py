@@ -4,6 +4,7 @@ import yaml
 import os
 import datetime
 import logging
+import math
 
 from einops import rearrange
 from itertools import product
@@ -248,6 +249,31 @@ def download_model(model_name):
         download_url(web_path, 'pretrained_models', filename=model_name)
     model = torch.load(local_path, map_location=lambda storage, loc: storage)
     return model
+
+
+
+def get_rollout_prob(step, args):
+    """Current rollout probability, following the configured schedule."""
+    if not getattr(args, 'rollout_training', False):
+        return 0.0
+
+    p_max  = getattr(args, 'rollout_prob', 0.3)
+    sched  = getattr(args, 'rollout_schedule', 'constant')
+    warmup = getattr(args, 'rollout_warmup', 0)
+    ramp   = getattr(args, 'rollout_ramp', 1)
+
+    if sched == 'constant':
+        return p_max
+    if step < warmup:
+        return 0.0
+
+    frac = min(1.0, (step - warmup) / max(1, ramp))
+
+    if sched == 'linear':
+        return p_max * frac
+    if sched == 'exponential':
+        return p_max * (1.0 - math.exp(-5.0 * frac))
+    return p_max
 
 
 # def merge_x_cond(xt, input, dataset_name, stage):
