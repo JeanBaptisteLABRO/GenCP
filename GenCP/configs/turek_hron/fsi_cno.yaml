@@ -30,7 +30,7 @@ depth_structure: 2 # 12
 
 # inference
 debug_flow: false
-num_inference_steps: 1
+num_inference_steps: 2
 use_coupled_sampling: True
 
 coupled: True
@@ -79,3 +79,5 @@ num_sampling_steps: 10
 save_figs_path: "./visualization_results"
 
 channel_multiplier: 16
+
+run_label: "coupled_12"

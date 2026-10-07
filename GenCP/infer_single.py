@@ -4,13 +4,14 @@
 """
 Sample new images from a pre-trained SiT.
 """
+import os
 from colorsys import yiq_to_rgb
 from numpy import False_
 import torch
 torch.backends.cuda.matmul.allow_tf32 = True
 torch.backends.cudnn.allow_tf32 = True
 from torchvision.utils import save_image
-from utils.utils import parse_ode_args, parse_sde_args, parse_transport_args, find_model, add_args_from_config, rel_l2_loss, mse_loss
+from utils.utils import parse_ode_args, parse_sde_args, parse_transport_args, find_model, add_args_from_config, rel_l2_loss, mse_loss, rel_l2_loss_per_step
 import argparse
 import sys
 from time import time
@@ -244,6 +245,10 @@ def main(mode, args):
     rel_l2_mean_sdf = 0
     num = 0
 
+
+
+    all_err_u, all_err_v, all_err_p, all_err_sdf = [], [], [], []
+
     start_time = time()
     for input, target, grid_x, grid_y, attrs in val_dataloader:
         input_norm, target_norm = data_normalizer.preprocess(input, target)
@@ -267,8 +272,9 @@ def main(mode, args):
 
         # model_kwargs = dict(x0=input_norm, cond=attrs)
         # samples = sample_fn(z, target_norm, model.to(device), **model_kwargs)
+
+        k = getattr(args, 'reinject_index', args.output_step - 3)
         
-        k = 9
         n_out = args.output_step
         current_input = input_norm
         blocks = []
@@ -333,6 +339,16 @@ def main(mode, args):
             rel_l2_mean_v += rel_l2_per_sample_v.mean().item()
             rel_l2_mean_p += rel_l2_per_sample_p.mean().item()
             rel_l2_mean_sdf += rel_l2_per_sample_sdf.mean().item()
+
+            err_u   = rel_l2_loss_per_step(samples_denorm[..., 0:1]*sdf_mask, target[..., 0:1]*sdf_mask)
+            err_v   = rel_l2_loss_per_step(samples_denorm[..., 1:2]*sdf_mask, target[..., 1:2]*sdf_mask)
+            err_p   = rel_l2_loss_per_step(samples_denorm[..., 2:3]*sdf_mask, target[..., 2:3]*sdf_mask)
+            err_sdf = rel_l2_loss_per_step(samples_denorm[..., 3:4]*sdf_mask, target[..., 3:4]*sdf_mask)
+
+            all_err_u.append(err_u.cpu())
+            all_err_v.append(err_v.cpu())
+            all_err_p.append(err_p.cpu())
+            all_err_sdf.append(err_sdf.cpu())
 
             num += 1
 
@@ -461,10 +477,56 @@ def main(mode, args):
                     save_name="time_series_animation.gif",
                     show_colorbar=True
                 )
+
+
+
+                import matplotlib.pyplot as plt
+
+                steps = range(err_u.shape[1])
+                plt.figure(figsize=(9, 5))
+                plt.plot(steps, err_u.mean(0).cpu(),   marker='o', label='u')
+                plt.plot(steps, err_v.mean(0).cpu(),   marker='o', label='v')
+                plt.plot(steps, err_p.mean(0).cpu(),   marker='o', label='p')
+                plt.plot(steps, err_sdf.mean(0).cpu(), marker='o', label='SDF')
+
+                for c in range(1, args.num_inference_steps):
+                    plt.axvline(c * args.output_step - 0.5, color='gray',
+                                linestyle='--', alpha=0.6)
+
+                plt.yscale('log')
+                plt.xlabel("Predicted timesteps")
+                plt.ylabel("Relative $L_2$ error")
+                plt.legend()
+                plt.grid(alpha=0.3)
+                plt.savefig(os.path.join(visualizer.save_dir, "error_per_timestep.png"),
+                            dpi=150, bbox_inches='tight')
+                plt.close()
+
+
+
             
         if num >= 5:
             break
     
+
+    import numpy as np
+
+    err_u_all   = torch.cat(all_err_u,   dim=0).mean(0).numpy()
+    err_v_all   = torch.cat(all_err_v,   dim=0).mean(0).numpy()
+    err_p_all   = torch.cat(all_err_p,   dim=0).mean(0).numpy()
+    err_sdf_all = torch.cat(all_err_sdf, dim=0).mean(0).numpy()
+
+    label = getattr(args, 'run_label', args.exp_name)
+    out_file = f"rollout_{label}.npz"
+
+    np.savez(out_file,
+             u=err_u_all, v=err_v_all, p=err_p_all, sdf=err_sdf_all,
+             output_step=args.output_step,
+             num_inference_steps=args.num_inference_steps,
+             reinject_index=k,
+             label=label)
+    print(f"Saved per-step errors to {out_file}")
+
     end_time = time()
     print(f"Total time: {end_time - start_time:.2f} seconds.")
 

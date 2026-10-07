@@ -45,7 +45,7 @@ train_batch_size: 3
 test_batch_size: 3
 
 input_step: 3
-output_step: 12
+output_step: 4
 stride: 1
 num_delta_t: 0 # 20
 

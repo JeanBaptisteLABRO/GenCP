@@ -24,7 +24,8 @@ use_surrogate: False
 
 # model
 is_resume: False
-checkpoint_path: "results/turek_hron_data/joint_CNO/2026-09-22_16-43-05/best_main_model.pth"
+#checkpoint_path: "results/turek_hron_data/joint_CNO/2026-09-22_16-43-05_output_step_12/best_main_model.pth"
+checkpoint_path: "results/turek_hron_data/joint_CNO/2026-10-02_15-38-41_output_step_4/best_main_model.pth"
 input_size: [108, 88] # [322, 226]
 in_dim: 4
 out_dim: 4
@@ -45,7 +46,7 @@ train_batch_size: 3
 test_batch_size: 3
 
 input_step: 3
-output_step: 12
+output_step: 4
 stride: 1
 num_delta_t: 0 # 20
 
@@ -66,10 +67,12 @@ gamma: 0.5
 
 # inference
 num_sampling_steps: 10
-num_inference_steps: 2
+num_inference_steps: 6
 
 # visualize
 save_figs_path: "./visualization_results"
 
 
 channel_multiplier: 16
+
+run_label: "joint_4"

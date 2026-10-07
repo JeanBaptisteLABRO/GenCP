@@ -290,9 +290,12 @@ def coupled_flow_sampling_algorithm_cp(couple_step_fn, input_norm, target_norm, 
 
     return final_result
 
-def autoregressive_inference(input_norm, target_norm, num_steps, device, args, attrs, couple_step_fn, k=9):
+def autoregressive_inference(input_norm, target_norm, num_steps, device, args, attrs, couple_step_fn, k=None):
     """Perform autoregressive inference with dual-field interaction (all data already normalized)"""
-    
+
+    if k is None:
+        k = getattr(args, 'reinject_index', args.output_step - 3)    
+
     initial_state = input_norm.clone()
     
     predictions_norm = []
@@ -400,7 +403,9 @@ def main(args):
     rel_l2_structure = 0.0
 
     num = 0
-    
+
+    all_err_u, all_err_v, all_err_p, all_err_sdf = [], [], [], []
+
     start_time = time()
     for input, target, grid_x, grid_y, attrs in val_dataloader:
 
@@ -480,6 +485,10 @@ def main(args):
             err_p   = rel_l2_loss_per_step(final_fluid_p*sdf_mask,   target[..., 2:3]*sdf_mask)
             err_sdf = rel_l2_loss_per_step(final_structure*sdf_mask, target[..., 3:4]*sdf_mask)
 
+            all_err_u.append(err_u.cpu())
+            all_err_v.append(err_v.cpu())
+            all_err_p.append(err_p.cpu())
+            all_err_sdf.append(err_sdf.cpu())
 
             num += 1
 
@@ -594,6 +603,26 @@ def main(args):
         if num >= 5:
             break
         
+    import numpy as np
+
+    err_u_all   = torch.cat(all_err_u,   dim=0).mean(0).numpy()
+    err_v_all   = torch.cat(all_err_v,   dim=0).mean(0).numpy()
+    err_p_all   = torch.cat(all_err_p,   dim=0).mean(0).numpy()
+    err_sdf_all = torch.cat(all_err_sdf, dim=0).mean(0).numpy()
+
+    label = getattr(args, 'run_label', args.exp_name)
+    out_file = f"rollout_{label}.npz"
+
+    k = getattr(args, 'reinject_index', args.output_step - 3)
+    
+    np.savez(out_file,
+             u=err_u_all, v=err_v_all, p=err_p_all, sdf=err_sdf_all,
+             output_step=args.output_step,
+             num_inference_steps=args.num_inference_steps,
+             reinject_index=k,
+             label=label)
+    print(f"Saved per-step errors to {out_file}")
+
     end_time = time()
     print(f"Total time: {end_time - start_time:.2f} seconds.")
 
