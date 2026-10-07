@@ -541,6 +541,35 @@ class Trainer:
             self.diffusion = None
             self.log_info("Using surrogate model as training backend")
 
+
+
+    @torch.no_grad()
+    def rollout_generate(self, cond, attrs):
+        """Generate one block of output_step frames from cond (B,3,H,W,4), no gradient."""
+        was_training = self.model.training
+        self.model.eval()
+
+        n_out = self.args.output_step
+        num_steps = getattr(self.args, 'num_sampling_steps', 10)
+
+        # Noise has the same shape as cond, except on the time axis
+        shape = (cond.shape[0], n_out) + tuple(cond.shape[2:])
+        x = torch.randn(shape, device=self.device, dtype=cond.dtype)
+
+        t_grid = torch.linspace(0.0, 1.0, num_steps, device=self.device)
+        dt = (t_grid[1] - t_grid[0]).item() if num_steps > 1 else 1.0
+
+        # Euler integration of the flow ODE, from noise to data
+        for t in t_grid[:-1]:
+            tb = t.expand(x.shape[0]).to(x)
+            vt = self.model(x, tb, cond.to(self.device), attrs)
+            x = x + vt * dt
+
+        if was_training:
+            self.model.train()
+        return x
+
+
             
     def train_step(self, input, target, attrs):
         """Single training step"""
